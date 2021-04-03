@@ -1,58 +1,91 @@
 // My first programming project.
 // First fully working version was done in 2018, added comments and refactored a bit in 2021.
 
-// Number of cells in a row/column
+// Number of cells in a row/column.
 int cellCount = 10; 
 
-// Size of one cell in pixels
-int cellSize;
+// Size of one cell in pixels.
+int cellSize = 800/cellCount;
 
-// The number of mines on the board
+// The number of mines on the board.
 int mineCount = 10;
 
-// Shows if the player has pressed on the mine and lost the game
+// Shows if the player has pressed on the mine and lost the game.
 boolean hasLost = false;
 
-// Mine marker on the board
-final int MINE = -1; 
+// Used for saving the amount of time which has passed between opening the game and starting it.
+int startTime;
+
+// Used for saving the time when the game ends.
+int endTime;
+
+// Mine marker on the board.
+final int MINE = -1;
 
 private final Model model = new Model(mineCount);
 private final View view = new View();
 
-// The starting values are initialised in setup
+// The starting values are initialised in setup.
 public void setup() {
-  // The size of the game window is 800x800 pixels
-  size(800, 800);
-
+  // The size of the game window is 800x800 pixels.
+  size(800, 900);
+  textSize(45);
   background(255);
   cellSize = 800/cellCount;
+  startTime = -1;
+  endTime = -1;
 }
 
 // This is the main game cycle. 
 // It constantly repeats and updates the game screen.
 public void draw() {
+  background(255);
   view.drawCellBorders();
   if (!hasLost) {
-    // only some cells are displayed
-    view.drawBoard(model.getBoard(), model.getDisplaying());
+    // only some cells are displayed.
+    view.drawBoard(model.getBoard(), model.getDisplaying(), model.getFlagged());
   } else {
-    // full board is displayed
-    view.drawBoard(model.getBoard());
+    // full board is displayed.
+    view.drawBoard(model.getBoard(), model.getFlagged());
   }
+  view.displayBottom(startTime, endTime);
 }
 
-// Controls the data flow for each mouse button pressed
+// Controls the data flow for each mouse button pressed.
 public void mousePressed() {
   int mouseRow = mouseX/cellSize;
   int mouseCol = mouseY/cellSize;
+  
+  if (startTime == -1) {
+    startTime = millis();
+  }
+  
   if (mouseButton == LEFT) {
-    model.setDisplaying(mouseRow, mouseCol);
-    int value = model.getBoardCell(mouseRow, mouseCol);
+    LeftPressed(mouseRow, mouseCol);
+  }
+  
+  if (mouseButton == RIGHT) {
+    RightPressed(mouseRow, mouseCol);
+  }
+}
+
+private void LeftPressed(int row, int col) {
+  // The cell must be unflagged, otherwise nothing is done.
+  if (!model.isFlagged(row, col)){
+    model.setDisplaying(row, col);
+    int value = model.getBoardCell(row, col);
     if (value == 0) {
-      model.findOpen(mouseRow, mouseCol);
+      model.findOpen(row, col);
     } else if (value == MINE) {
       hasLost = true;
+      endTime = millis();
     }
+  }
+}
+
+private void RightPressed(int row, int col) {
+  if (!model.isCellDisplayed(row, col) && !hasLost) {
+    model.changeFlagState(row, col);
   }
 }
 
@@ -75,10 +108,14 @@ class Model {
   // used for saving visited cells when opening large empty areas with recursion
   private boolean[][] visited;
   
+  // used for saving flagged cells
+  private boolean[][] flagged;
+  
   public Model(int mineCount) {
     board = new int[cellCount][cellCount];
     displaying = new boolean[cellCount][cellCount];
     visited = new boolean[cellCount][cellCount];
+    flagged = new boolean[cellCount][cellCount];
     this.mineCount = mineCount;
     generateMines();
     findCellNumbers(cellCount);
@@ -174,6 +211,14 @@ class Model {
     return displaying[row][col];
   }
   
+  public void changeFlagState (int row, int col) {
+    if (flagged[row][col]) {
+      flagged[row][col] = false;
+    } else {
+      flagged[row][col] = true;
+    }
+  }
+  
   // Returns all cell values on the board
   public int[][] getBoard() {
     return board;
@@ -182,6 +227,14 @@ class Model {
   // Returns each cell's displaying value
   public boolean[][] getDisplaying() {
     return displaying;
+  }
+  
+  public boolean[][] getFlagged() {
+    return flagged;
+  }
+  
+  public boolean isFlagged(int row, int col) {
+    return flagged[row][col];
   }
 }
 
@@ -197,44 +250,51 @@ class View {
     mineImage = loadImage("https://is1-ssl.mzstatic.com/image/thumb/Purple117/v4/ab/22/44/ab22447d-7b7b-26a3-fec8-a2f8399c6298/mzl.nnkcdmgj.png/246x0w.jpg");
     flagImage = loadImage("https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Minesweeper_flag.svg/2000px-Minesweeper_flag.svg.png");
     mineImage.resize(cellSize-5, cellSize-5); // cellSize - 5 allows the image to fit in the cell.
+    flagImage.resize(cellSize-5, cellSize-5);
   }
   
   // Draws cell borders on the screen.
   public void drawCellBorders() { 
     for (int i=0; i<cellCount*cellSize; i+=cellSize) {
-      line (0, i, width, i);
-      line (i, 0, i, height);
+      line (0, i, 800, i);
+      line (i, 0, i, 800);
     }
   }
   
   // Displays the selected cell values on the screen
-  public void drawBoard(int[][] board, boolean[][] displaying) {
+  public void drawBoard(int[][] board, boolean[][] displaying, boolean[][] flagged) {
     for (int i=0; i<cellCount; i++) {
       for (int k=0; k<cellCount; k++) {
-        if (displaying[i][k]) {
-          int value = board[i][k];
-          if (value > 0) {
-            displayCellValue(i, k, value);
-          } else if (value == 0) {
-            displayEmptyCell(i, k);
-          }
+        if (flagged [i][k]) {
+          displayFlag(i, k);
+        } else if (displaying[i][k]) {
+            int value = board[i][k];
+            if (value > 0) {
+              displayCellValue(i, k, value);
+            } else if (value == 0) {
+              displayEmptyCell(i, k);
+            }
         }
       }
     }
   }
   
   // Displays all cell values on the screen
-  public void drawBoard(int[][] board) {
+  public void drawBoard(int[][] board, boolean[][] flagged) {
     for (int i=0; i<cellCount; i++) {
       for (int k=0; k<cellCount; k++) {
-          int value = board[i][k];
-          if (value > 0) {
-            displayCellValue(i, k, value);
-          } else if (value == 0) {
-            displayEmptyCell(i, k);
-          } else if (value == MINE) {
-            displayMine(i, k);
+          if (flagged [i][k]) {
+          displayFlag(i, k);
+          } else {
+            int value = board[i][k];
+            if (value > 0) {
+              displayCellValue(i, k, value);
+            } else if (value == 0) {
+              displayEmptyCell(i, k);
+            } else if (value == MINE) {
+              displayMine(i, k);
           }
+        }
       }
     }
   }
@@ -264,24 +324,64 @@ class View {
   
   // Writes a smaller number when the cell is smaller
   private void writeSmallerNumber(int row, int col, int value) {
-    textSize(45);
     text(value, row * cellSize+cellSize / 2, col * cellSize + cellSize / 2);
   }
   
   // Write a bigger number when the cell is larger
   private void writeBiggerNumber(int row, int col, int value) {
-    textSize(45);
     text(value, row * cellSize+cellSize / 2, col * cellSize+cellSize / 1.5);
   }
   
   // Makes empty cells (with value 0) look grey on the screen
   private void displayEmptyCell(int row, int col) {
     fill(200, 200, 200);
-    rect(cellSize * row + cellSize / 28, cellSize * col + cellSize / 28, cellSize-5, cellSize-5);
+    rect(cellSize * row + cellSize / 28, cellSize * col + cellSize / 28, cellSize - 5, cellSize - 5);
   }
   
   // Displays the mine picture in the given cell
   private void displayMine(int row, int col) {
-    image(mineImage, cellSize * row + cellSize / 28, cellSize * col + cellSize/28);
+    image(mineImage, cellSize * row + cellSize / 28, cellSize * col + cellSize / 28);
+  }
+  
+  public void displayFlag(int row, int col) {
+    image(flagImage, cellSize * row + cellSize / 28, cellSize * col + cellSize / 28);
+  }
+  
+  public void displayBottom(int startTime, int endTime) {
+    drawBottomBackground();
+    timePassed(startTime, endTime);
+  }
+  
+  private void drawBottomBackground() {
+    fill(30);
+    rect(0, 800, width, height - 800); 
+  }
+  
+  private void timePassed(int startTime, int endTime) {
+    if (!hasLost) {
+      writeTimeRunning(startTime);
+    } else {
+      writeEndTime(endTime);
+    }
+  }
+  
+  private void writeTimeRunning(int startTime) {
+    if (startTime > 0 && startTime < 99999) {
+        int time = (millis() - startTime) / 1000;
+        writeTime(time);
+      } else {
+        writeTime(0);
+      }
+  }
+  
+  private void writeEndTime(int endTime) {
+    int time = (endTime - startTime) / 1000;
+    writeTime(time);
+  }
+  
+  private void writeTime(int time) {
+    fill(197, 232, 23);
+    String timeText = String.format("Time passed: %s", time);
+    text(timeText, 40, 850);
   }
 }
